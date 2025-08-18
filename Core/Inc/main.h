@@ -31,7 +31,11 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include "eeprom.h"
+#include "profile.h"
+#include "stddef.h"
+#include "protocol.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
