@@ -7,6 +7,7 @@
 
 #include "main.h"
 #include "protocol.h"
+#include <math.h>
 
 const char cmdPrefix[PREFIX_CMD_LEN] = PREFIX_CMD_STR;
 
@@ -33,11 +34,36 @@ void uartFaultReset()
 	return;
 }
 
+
 uint8_t asciiToNum(char symbol, uint8_t* num) //only decimal chars input
 {
-	if((symbol < 0x30) || (symbol > 39)) return RV_ERROR;
+	if((symbol < 0x30) || (symbol > 0x39)) return RV_ERROR;
 	else {*num = symbol - 0x30; return RV_OK;};
 }
+
+uint8_t paramToNum(char* param, int32_t *result)
+{
+	uint32_t tempResult = 0;
+	uint32_t tempNum 	= 0;
+	int		 paramLen	= 0;
+	for(int i = MAX_PARAM_LEN-1; i > -1; i--)
+	{
+		if(param[i] != 0)
+		{
+			tempNum = 0;
+			if(!asciiToNum(param[i], (uint8_t*)&tempNum))  return RV_ERROR;
+
+			for(int p = 0; p < paramLen; p++)  tempNum *= 10;
+			paramLen++;
+			tempResult += tempNum;
+		}
+	}
+
+	if(paramLen == 0) return RV_ERROR;
+	*result = tempResult;
+	return RV_OK;
+}
+
 
 uint8_t uartSend(USART_TypeDef* USART, uartSendTypedef uartSendData, uint8_t* data, int size)
 {
@@ -96,10 +122,12 @@ void uartRXNEHandler(USART_TypeDef* USART)
 						break;
 					case FLAG_ADDR:
 						pCurrParam = addrParam;
+						memset(addrParam, 0, MAX_PARAM_LEN);
 						flagTemp.addr = 1;
 						break;
 					case FLAG_VALUE:
 						pCurrParam = valueParam;
+						memset(valueParam, 0, MAX_PARAM_LEN);
 						flagTemp.value = 1;
 						break;
 					default:
@@ -172,9 +200,9 @@ void cmdHandler()
 	}
 	else if(flagStatus.read)
 	{
-		if(flagStatus.addr)
+		if(flagStatus.addr) //address data exist flag
 		{
-			//check param
+
 		}
 		else
 		{
