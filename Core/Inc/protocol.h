@@ -10,13 +10,13 @@
 
 #include "main.h"
 
-#define 	PREFIX_CMD_LEN 		7
-#define		MAX_PARAM_LEN		5
+#define		MAX_PARAM_LEN		5	//max -a & -v parameter length
 
-#define		PREFIX_CMD_STR		"eeprom "
+#define 	PREFIX_CMD_LEN 		7
+#define		PREFIX_CMD_STR		"eeprom "	//command prefix
 
 #define		SPACE_CHAR			' '
-#define		LF_CHAR				(char)0x0A
+#define		LF_CHAR				(char)0x0A	//end command sign
 
 #define		FLAG_CHAR			'-'
 #define		FLAG_WRITE			'w'		//must be followed with -a xxx & -v xxx flags
@@ -26,8 +26,9 @@
 #define		FLAG_ADDR			'a'
 #define		FLAG_VALUE			'v'
 
-#define		RX_STATE_IDLE		0
-#define		RX_STATE_PREFIX		1
+//RX state machine values
+#define		RX_STATE_IDLE		0 //wait for input
+#define		RX_STATE_PREFIX		1 //
 #define		RX_STATE_FLAG		2
 #define		RX_STATE_FLAG_DATA	3
 
@@ -40,13 +41,13 @@ typedef struct
 
 typedef struct
 {
-	uint8_t busError;
-	uint8_t	write;
-	uint8_t read;
-	uint8_t erase;
-	uint8_t dumpAll;
-	uint32_t addr;
-	uint32_t value;
+	uint8_t busError; 	//must be set 1 when protocol error occured
+	uint8_t	write;		//write flag (-w) detected
+	uint8_t read;		//read 	flag (-r) detected
+	uint8_t erase;		//erase flag (-e) detected
+	uint8_t dumpAll;	//dumpAll flag (-d) detected
+	uint32_t addr;		//addr flag  (-a) detected
+	uint32_t value;		//value flag (-v) detected
 }cmdFlagsTypedef;
 
 enum returnValue
@@ -55,8 +56,8 @@ enum returnValue
 	RV_OK
 };
 
-void uartRXNEHandler(USART_TypeDef* USART);
-void uartTXEHandler(USART_TypeDef* USART, uartSendTypedef uartSendData);
+void uartRXNEHandler(USART_TypeDef* USART); //RX not empty interrupt handler
+void uartTXEHandler(USART_TypeDef* USART, uartSendTypedef uartSendData); //TX empty interrupt handler
 uint8_t asciiToNum(char symbol, uint8_t* num); //Only decimal chars input
 
 #endif /* INC_PROTOCOL_H_ */

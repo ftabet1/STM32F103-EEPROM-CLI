@@ -17,8 +17,9 @@ uint8_t paramHandledFlag = 0;	//this flag display handled flag param or not
 
 cmdFlagsTypedef flagTemp;
 cmdFlagsTypedef flagStatus;
-
 uartSendTypedef	uartSendData;
+
+char readValueStr[4] = {(char)0};
 
 char 	prevFlag 				= (char)0;
 char	*pCurrParam			= NULL;
@@ -34,11 +35,28 @@ void uartFaultReset()
 	return;
 }
 
+uint32_t powi(uint32_t a, uint32_t b)
+{
+	int32_t temp = 1;
+	for(int i = 0; i < b; i++) temp *= a;
+	return temp;
+}
 
 uint8_t asciiToNum(char symbol, uint8_t* num) //only decimal chars input
 {
 	if((symbol < 0x30) || (symbol > 0x39)) return RV_ERROR;
 	else {*num = symbol - 0x30; return RV_OK;};
+}
+
+uint8_t numToHex(uint16_t num, char* str)
+{
+	uint32_t temp = 0;
+	for(int i = 0; i < 4; i++)
+	{
+		temp = (num / powi(16,3-i)) & 0xF;
+		str[i] = temp > 9 ? temp + 0x37 : temp + 0x30;
+	}
+	return RV_OK;
 }
 
 uint8_t paramToNum(char* param, int32_t *result)
@@ -202,7 +220,15 @@ void cmdHandler()
 	{
 		if(flagStatus.addr) //address data exist flag
 		{
-
+			int32_t addr = 0;
+			uint16_t data = 0;
+			if(paramToNum(addrParam, &addr) == 0) {uartFaultReset(); return;}
+			if(EE_ReadVariable((uint16_t)addr, &data)) {uartFaultReset(); return;}
+			numToHex(data, readValueStr);
+			while(1)
+			{
+				//TODO: BLOCK SEND ROUTINE
+			}
 		}
 		else
 		{
