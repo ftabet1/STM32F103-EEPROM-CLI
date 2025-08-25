@@ -10,6 +10,8 @@
 
 #include "main.h"
 
+
+
 #define		MAX_PARAM_LEN		5	//max -a & -v parameter length
 
 #define 	PREFIX_CMD_LEN 		7
@@ -56,8 +58,13 @@ enum returnValue
 	RV_OK
 };
 
-void uartRXNEHandler(USART_TypeDef* USART); //RX not empty interrupt handler
-void uartTXEHandler(USART_TypeDef* USART, uartSendTypedef uartSendData); //TX empty interrupt handler
+
+void timerStartup(TIM_TypeDef* TIM);
+void timeoutHandler(TIM_TypeDef *TIM);
+void uartRXNEHandler(USART_TypeDef* USART, TIM_TypeDef *TIM); //RX not empty interrupt handler
+void uartTXEHandler(USART_TypeDef* USART, uartSendTypedef* uartSendData); //TX empty interrupt handler
+void cmdHandler();
+uint8_t uartSend(USART_TypeDef* USART, uartSendTypedef* uartSendData, uint8_t* data, int size);
 uint8_t asciiToNum(char symbol, uint8_t* num); //Only decimal chars input
 
 #endif /* INC_PROTOCOL_H_ */

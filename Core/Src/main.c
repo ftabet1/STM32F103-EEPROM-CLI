@@ -58,7 +58,6 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -92,15 +91,25 @@ int main(void)
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  USART1->CR1 |= USART_CR1_RXNEIE;
 
+  TIM4->CR1 &= ~(TIM_CR1_UDIS | TIM_CR1_OPM);
+  TIM4->CR1 |= TIM_CR1_CEN;
+  TIM4->DIER |= TIM_DIER_UIE;
+
+  FLASH->KEYR = 0x45670123;
+  FLASH->KEYR = 0xCDEF89AB;
+
+  EE_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  EE_Init();
+	  cmdHandler();
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

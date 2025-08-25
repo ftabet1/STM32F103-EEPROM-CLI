@@ -19,6 +19,8 @@ cmdFlagsTypedef flagTemp;
 cmdFlagsTypedef flagStatus;
 uartSendTypedef	uartSendData;
 
+char err[2] = "?\n";
+
 char readValueStr[4] = {(char)0};
 
 char 	prevFlag 				= (char)0;
@@ -30,8 +32,10 @@ void uartFaultReset()
 {
 	rxCnt = 0;
 	memset(&flagTemp, 0, sizeof(cmdFlagsTypedef));
+	memset(&flagStatus, 0, sizeof(cmdFlagsTypedef));
 	rxState = RX_STATE_IDLE;
 	flagStatus.busError = 1;
+	TIM4->DIER &= ~TIM_DIER_UIE;
 	return;
 }
 
@@ -59,7 +63,7 @@ uint8_t numToHex(uint16_t num, char* str)
 	return RV_OK;
 }
 
-uint8_t paramToNum(char* param, int32_t *result)
+uint8_t paramToNum(char* param, uint16_t *result)
 {
 	uint32_t tempResult = 0;
 	uint32_t tempNum 	= 0;
@@ -83,28 +87,35 @@ uint8_t paramToNum(char* param, int32_t *result)
 }
 
 
-uint8_t uartSend(USART_TypeDef* USART, uartSendTypedef uartSendData, uint8_t* data, int size)
+uint8_t uartSend(USART_TypeDef* USART, uartSendTypedef* uartSendData, uint8_t* data, int size)
 {
-	if((USART->CR1 & USART_CR1_TXEIE) != 0) return 0;
-	uartSendData.p = data;
-	uartSendData.size = size;
-	uartSendData.cnt = 0;
+	if((USART->CR1 & USART_CR1_TXEIE) != 0) return RV_ERROR;
+	uartSendData->p = data;
+	uartSendData->size = size;
+	uartSendData->cnt = 0;
 	USART->CR1 |= USART_CR1_TXEIE;
-	return 1;
+	return RV_OK;
 }
 
-void uartRXNEHandler(USART_TypeDef* USART)
+void uartRXNEHandler(USART_TypeDef* USART, TIM_TypeDef *TIM)
 {
 	uint32_t status = USART->SR;
 		if((status & USART_SR_RXNE) != 0)
 		{
+			uint32_t statu = TIM->SR;
+			statu = TIM->SR;
 			uint8_t rxData = USART->DR;
-
+			timerStartup(TIM4);
 			switch(rxState)
 			{
 			case RX_STATE_IDLE:
 				if(rxData != cmdPrefix[rxCnt++]) rxCnt = 0;
-				if(rxCnt >= PREFIX_CMD_LEN) {rxState = RX_STATE_FLAG; rxCnt = 0;}
+				if(rxCnt >= PREFIX_CMD_LEN)
+				{
+					rxState = RX_STATE_FLAG;
+					rxCnt = 0;
+					memset(&flagTemp, 0, sizeof(cmdFlagsTypedef));
+				}
 				break;
 			case RX_STATE_FLAG:
 				if(rxCnt == 0)
@@ -113,7 +124,9 @@ void uartRXNEHandler(USART_TypeDef* USART)
 					else if(rxData == LF_CHAR) //go to idle, command received
 					{
 						memcpy(&flagStatus, &flagTemp, sizeof(cmdFlagsTypedef));
+						TIM->DIER &= ~TIM_DIER_UIE;
 						rxState = RX_STATE_IDLE;
+						rxCnt = 0;
 					}
 					else if(rxData != SPACE_CHAR) {uartFaultReset(); return;}//invalid flag prefix, go to fault handler
 				}
@@ -171,46 +184,76 @@ void uartRXNEHandler(USART_TypeDef* USART)
 				else if(rxData == LF_CHAR) //if get LF char then copy flags to out struct
 				{
 					memcpy(&flagStatus, &flagTemp, sizeof(cmdFlagsTypedef));
+					TIM->DIER &= ~TIM_DIER_UIE;
 					rxState = RX_STATE_IDLE;
+					rxCnt = 0;
 				}
-				else if(!((rxData < 0x30) || (rxData > 39))) //decimal char check
+				else if(!((rxData < 0x30) || (rxData > 0x39))) //decimal char check
 				{
 					paramHandledFlag = 1;
 					if(rxCnt == MAX_PARAM_LEN) {uartFaultReset(); return;}//wrong param length
 					pCurrParam[rxCnt++] = rxData; //put param data
 				}
-				else if((rxData < 0x30) || (rxData > 39)) {uartFaultReset(); return;} //wrong param format
+				else if((rxData < 0x30) || (rxData > 0x39)) {uartFaultReset(); return;} //wrong param format
 				break;
 			default:
 				break;
-
 			}
 		}
 	return;
 }
 
-void uartTXEHandler(USART_TypeDef* USART, uartSendTypedef uartSendData)
+void uartTXEHandler(USART_TypeDef* USART, uartSendTypedef* uartSendData)
 {
 	if(((USART->CR1 & USART_CR1_TXEIE) != 0) && ((USART->SR & USART_SR_TXE) != 0))
 	{
-		if(uartSendData.size > 0)
+		if(uartSendData->size > 0)
 		{
-			USART->DR = uartSendData.p[uartSendData.cnt++];
-			uartSendData.size--;
+			USART->DR = uartSendData->p[uartSendData->cnt++];
+			uartSendData->size--;
 		}
 		else
 		{
 			USART->CR1 &= ~USART_CR1_TXEIE;
-			uartSendData.cnt = 0;
+			uartSendData->cnt = 0;
 		}
 	}
 }
+
+void timeoutHandler(TIM_TypeDef* TIM)
+{
+	if((TIM->SR & TIM_SR_UIF) != 0)
+	{
+		rxState = RX_STATE_IDLE;
+		rxCnt = 0;
+		TIM->SR = 1;
+		TIM->DIER &= ~TIM_DIER_UIE;
+		flagStatus.busError = 1;
+	}
+}
+
+void timerStartup(TIM_TypeDef* TIM)
+{
+	TIM->DIER &= ~TIM_DIER_UIE;
+	TIM->SR = 0;
+	TIM->CNT = 1;
+	TIM->EGR |= TIM_EGR_UG;
+	TIM->SR = 0;
+	TIM->DIER |= TIM_DIER_UIE;
+}
+
 
 void cmdHandler()
 {
 	if(flagStatus.busError)
 	{
 		flagStatus.busError = 0;
+		//invalid command
+		while(1)
+		{
+			if(uartSend(USART1, &uartSendData, (uint8_t*)err, strlen(err))) break;
+		}
+		memset(&flagStatus, 0, sizeof(cmdFlagsTypedef));
 	}
 	else if(flagStatus.dumpAll)
 	{
@@ -220,37 +263,62 @@ void cmdHandler()
 	{
 		if(flagStatus.addr) //address data exist flag
 		{
-			int32_t addr = 0;
+			uint16_t addr = 0;
 			uint16_t data = 0;
 			if(paramToNum(addrParam, &addr) == 0) {uartFaultReset(); return;}
-			if(EE_ReadVariable((uint16_t)addr, &data)) {uartFaultReset(); return;}
+			int16_t result = EE_ReadVariable((uint16_t)addr, &data);
+			if(result != 0) {uartFaultReset(); return;}
 			numToHex(data, readValueStr);
 			while(1)
 			{
-				//TODO: BLOCK SEND ROUTINE
+				if(uartSend(USART1, &uartSendData, (uint8_t*)readValueStr, strlen(readValueStr))) break;
 			}
+			memset(&flagStatus, 0, sizeof(cmdFlagsTypedef));
 		}
 		else
 		{
 			//invalid command
+			while(1)
+			{
+				if(uartSend(USART1, &uartSendData, (uint8_t*)err, strlen(err))) break;
+			}
+			memset(&flagStatus, 0, sizeof(cmdFlagsTypedef));
 		}
 	}
 	else if(flagStatus.write)
 	{
 		if(flagStatus.addr && flagStatus.value)
 		{
-
+			uint16_t addr = 0;
+			uint16_t data = 0;
+			if(paramToNum(addrParam, &addr) == 0) {uartFaultReset(); return;}
+			if(paramToNum(valueParam, &data) == 0) {uartFaultReset(); return;}
+			int16_t result = EE_WriteVariable((uint16_t)addr, data);
+			if(result != 0) {uartFaultReset(); return;}
+			numToHex(data, readValueStr);
+			while(1)
+			{
+				if(uartSend(USART1, &uartSendData, (uint8_t*)readValueStr, strlen(readValueStr))) break;
+			}
+			memset(&flagStatus, 0, sizeof(cmdFlagsTypedef));
 		}
 		else
 		{
 			//invalid command
+			while(1)
+			{
+				if(uartSend(USART1, &uartSendData, (uint8_t*)err, strlen(err))) break;
+			}
+			memset(&flagStatus, 0, sizeof(cmdFlagsTypedef));
 		}
 	}
 	else if(flagStatus.erase)
 	{
-
+		while(1)
+		{
+			if(uartSend(USART1, &uartSendData, (uint8_t*)err, strlen(err))) break;
+		}
+		memset(&flagStatus, 0, sizeof(cmdFlagsTypedef));
 	}
-
-	memset(&flagStatus, 0, sizeof(cmdFlagsTypedef));
 }
 

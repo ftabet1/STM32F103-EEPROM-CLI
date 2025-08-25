@@ -205,6 +205,7 @@ void SysTick_Handler(void)
 void TIM4_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM4_IRQn 0 */
+  timeoutHandler(TIM4);
 
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
@@ -219,8 +220,8 @@ void TIM4_IRQHandler(void)
 void USART1_IRQHandler(void)
 {
   /* USER CODE BEGIN USART1_IRQn 0 */
-  uartRXNEHandler(USART1);
-  uartTXEHandler(USART1, uartSendData);
+  uartRXNEHandler(USART1, TIM4);
+  uartTXEHandler(USART1, &uartSendData);
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
